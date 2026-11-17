@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using NFe.Classes.Informacoes.Detalhe.Tributacao.Compartilhado.InformacoesIbsCbs;
 using NFe.Classes.Informacoes.Detalhe.Tributacao.Estadual.Tipos;
 using NFe.Classes.Informacoes.Detalhe.Tributacao.Federal.Tipos;
 
@@ -8,6 +9,45 @@ namespace NFe.Danfe.Html.CrossCutting
 {
     internal  static class Extensions
     {
+        /// <summary>
+        ///     Alíquota a ser impressa no DANFE para IBS UF, IBS Município e CBS (NT 2026.010).
+        ///     Quando o grupo gRed é informado (redução de alíquota ou compra governamental) imprime a alíquota efetiva
+        ///     (pAliqEfet), senão a alíquota vigente.
+        /// </summary>
+        /// <param name="aliquota">Alíquota vigente (pIBSUF, pIBSMun ou pCBS)</param>
+        /// <param name="gRed">Grupo de redução de alíquota</param>
+        public static decimal ObterAliquotaEfetiva(this decimal aliquota, gRed gRed)
+        {
+            return gRed != null ? gRed.pAliqEfet : aliquota;
+        }
+
+        /// <summary>
+        ///     Descrição do código de regime tributário no formato "3 - REGIME NORMAL"
+        /// </summary>
+        public static string CrtDescricao(this NFe.Classes.Informacoes.Emitente.CRT crt)
+        {
+            string descricao;
+            switch (crt)
+            {
+                case NFe.Classes.Informacoes.Emitente.CRT.SimplesNacional:
+                    descricao = "SIMPLES NACIONAL";
+                    break;
+                case NFe.Classes.Informacoes.Emitente.CRT.SimplesNacionalExcessoSublimite:
+                    descricao = "SIMPLES NACIONAL - EXCESSO DE SUBLIMITE";
+                    break;
+                case NFe.Classes.Informacoes.Emitente.CRT.RegimeNormal:
+                    descricao = "REGIME NORMAL";
+                    break;
+                case NFe.Classes.Informacoes.Emitente.CRT.SimplesNacionalMei:
+                    descricao = "SIMPLES NACIONAL - MEI";
+                    break;
+                default:
+                    return string.Empty;
+            }
+
+            return $"{(int) crt} - {descricao}";
+        }
+
         public static string orig(this ICMSBasico icms)
         {
             return GetOrigIcms(icms, "orig");

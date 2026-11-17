@@ -67,9 +67,9 @@
                 <tr>
                     <td class="txt-center valign-middle">
                         <span class="block">
-                            Consulta de autenticidade no portal nacional da NF-e
+                            Consulte a autenticidade no portal nacional da NF-e
                         </span>
-                        www.nfe.fazenda.gov.br/portal ou no site da Sefaz Autorizada.
+                        www.nfe.fazenda.gov.br/portal ou no site da SEFAZ autorizadora.
                     </td>
                 </tr>
             </tbody>
@@ -102,39 +102,52 @@
                         <span class="nf-label">INSCRIÇÃO ESTADUAL</span>
                         <span class="info">[nl_company_ie]</span>
                     </td>
-                    <td style="width: 67.5mm">
-                        <span class="nf-label">INSCRIÇÃO ESTADUAL DO SUBST. TRIB.</span>
+                    <td style="width: 64mm">
+                        <span class="nf-label">INSCRIÇÃO ESTADUAL DO SUBSTITUTO TRIBUTÁRIO</span>
                         <span class="info">[nl_company_ie_st]</span>
                     </td>
-                    <td style="width: 64.3mm">
-                        <span class="nf-label">CNPJ</span>
+                    <td style="width: 59.6mm">
+                        <span class="nf-label">CNPJ / CPF</span>
                         <span class="info">[nl_company_cnpj_cpf]</span>
                     </td>
                 </tr>
             </tbody>
         </table>
+
+        <!-- Regime tributário / Regime de apuração do IBS e da CBS -->
+        <table cellpadding="0"
+               cellspacing="0"
+               class="boxRegime no-top border-table">
+            <tbody>
+                <tr>
+                    <td>
+                        <span class="nf-label">CÓDIGO DO REGIME TRIBUTÁRIO</span>
+                        <span class="info">[ds_company_crt]</span>
+                    </td>
+                    <!--[ini_apuracao]-->
+                    <td style="width: 92.4mm">
+                        <span class="nf-label">TIPO DE REGIME DE APURAÇÃO DO IBS E DA CBS</span>
+                        <span class="info">[ds_company_apuracao_ibs_cbs]</span>
+                    </td>
+                    <!--[fim_apuracao]-->
+                </tr>
+            </tbody>
+        </table>
         <!-- Dados do produto/serviço -->
+        <!--[ini_itens]-->
         <p class="area-name">Dados do produto/serviço</p>
         <div class="wrapper-border2">
             <table cellpadding="0" cellspacing="0" class="boxProdutoServico">
                 <thead class="listProdutoServico" id="table">
                     <tr class="titles">
-                        <th class="cod" style="width: 15.5mm">CÓDIGO</th>
-                        <th class="descrit" style="width: 66.1mm">
-                            DESCRIÇÃO DO PRODUTO/SERVIÇO
-                        </th>
-                        <th class="ncmsh">NCMSH</th>
-                        <th class="cst">CST</th>
-                        <th class="cfop">CFOP</th>
-                        <th class="un">UN</th>
-                        <th class="amount">QTD.</th>
-                        <th class="valUnit">VLR.UNIT</th>
-                        <th class="valTotal">VLR.TOTAL</th>
-                        <th class="bcIcms">BC ICMS</th>
-                        <th class="valIcms">VLR.ICMS</th>
-                        <th class="valIpi">VLR.IPI</th>
-                        <th class="aliqIcms">ALIQ.ICMS</th>
-                        <th class="aliqIpi">ALIQ.IPI</th>
+                        <th class="descrit" style="width: 38mm">DESCRIÇÃO DO PRODUTO / SERVIÇO</th>
+                        <th class="cst" style="width: 11.5mm">CST / CFOP</th>
+                        <th class="amount" style="width: 14mm">QTD / UN</th>
+                        <th class="valUnit" style="width: 15.5mm">VLR UNIT</th>
+                        <th class="valTotal" style="width: 16mm">VLR TOTAL</th>
+                        <th class="bases" style="width: 25mm">BASES DE CÁLCULO</th>
+                        <th class="aliquotas" style="width: 24.5mm">ALÍQUOTAS</th>
+                        <th class="valores" style="width: 35.5mm">VALOR DOS TRIBUTOS</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -142,6 +155,8 @@
                 </tbody>
             </table>
         </div>
+        <!--[fim_itens]-->
+        [ds_additional_information_continuation]
         <footer>
             <table cellpadding="0" cellspacing="0">
                 <tbody>

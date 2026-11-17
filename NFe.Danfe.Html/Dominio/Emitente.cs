@@ -36,6 +36,16 @@ namespace NFe.Danfe.Html.Dominio
 
         public Endereco Endereco { get; }
 
+        /// <summary>
+        ///     Código do regime tributário (CRT - C21)
+        /// </summary>
+        public string Crt { get; }
+
+        /// <summary>
+        ///     Descrição do código do regime tributário
+        /// </summary>
+        public string CrtDescricao { get; }
+
         #endregion
 
         #region Construtor
@@ -54,6 +64,22 @@ namespace NFe.Danfe.Html.Dominio
             CnpjCpf = cnpjCpf;
             Logo = logo;
             Endereco = endereco;
+        }
+
+        /// <summary>
+        /// </summary>
+        /// <param name="nome">Nome</param>
+        /// <param name="ie">Inscrição estadual</param>
+        /// <param name="cnpjCpf">CPF ou CNPJ</param>
+        /// <param name="logo">Imagem em base64</param>
+        /// <param name="endereco">Endereço</param>
+        /// <param name="crt">Código do regime tributário</param>
+        /// <param name="crtDescricao">Descrição do código do regime tributário</param>
+        public Emitente(string nome, string ie, string cnpjCpf, string logo, Endereco endereco, string crt,
+                string crtDescricao) : this(nome, ie, cnpjCpf, logo, endereco)
+        {
+            Crt = crt;
+            CrtDescricao = crtDescricao;
         }
 
         #endregion

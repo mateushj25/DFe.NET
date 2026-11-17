@@ -112,6 +112,12 @@ namespace NFe.Danfe.Html.Dominio
         /// </summary>
         public string Creditos { get; }
 
+        /// <summary>
+        ///     QR Code informado no XML (qrCode - ZX02). Ainda não impresso no DANFE: a NT 2026.010 aguarda NT futura com
+        ///     as regras de formação do QR Code para o modelo 55
+        /// </summary>
+        public string QrCode { get; }
+
         #endregion
 
         #region Construtor
@@ -187,7 +193,8 @@ namespace NFe.Danfe.Html.Dominio
             var enderecoEmit = new Endereco(nfe.infNFe.emit.enderEmit.xLgr, nfe.infNFe.emit.enderEmit.xBairro, 
                     nfe.infNFe.emit.enderEmit.xMun, nfe.infNFe.emit.enderEmit.nro, nfe.infNFe.emit.enderEmit.CEP,
                     nfe.infNFe.emit.enderEmit.UF.ToString(), nfe.infNFe.emit.enderEmit.fone.ToString(), nfe.infNFe.emit.enderEmit.UF.ToString());
-            Emitente = new Emitente(nfe.infNFe.emit.xNome, nfe.infNFe.emit.IE, doc, logo, enderecoEmit);
+            Emitente = new Emitente(nfe.infNFe.emit.xNome, nfe.infNFe.emit.IE, doc, logo, enderecoEmit,
+                    ((int) nfe.infNFe.emit.CRT).ToString(), nfe.infNFe.emit.CRT.CrtDescricao());
 
             #endregion
 
@@ -308,10 +315,24 @@ namespace NFe.Danfe.Html.Dominio
                      pIcms = item.imposto.ICMS.TipoICMS.pICMS();
                 }
 
+                #region Reforma Tributária (IBS, CBS e IS)
+
+                var ibsCbs = item.imposto?.IBSCBS;
+                var gIbsCbs = ibsCbs?.gIBSCBS;
+                var isItem = item.imposto?.IS;
+
+                #endregion
+
                 Produtos.Add(new Produto(item.prod.cProd, item.prod.xProd, item.infAdProd,
                         item.prod.uTrib, item.prod.qTrib, item.prod.vUnTrib, valorIcms, item.prod.NCM, item.prod.CFOP.ToString(),
-                        st, icmsBaseCalculo,pIcms,item.imposto?.IPI?.TipoIPI.pIPI(), item.imposto?.IPI?.TipoIPI.vIPI(),item.prod.vProd));
-                 
+                        st, icmsBaseCalculo,pIcms,item.imposto?.IPI?.TipoIPI.pIPI(), item.imposto?.IPI?.TipoIPI.vIPI(),item.prod.vProd,
+                        item.imposto?.IPI?.TipoIPI?.vBC(), ibsCbs?.cClassTrib,
+                        gIbsCbs?.vBC, isItem?.vBCIS,
+                        gIbsCbs?.gIBSUF?.pIBSUF.ObterAliquotaEfetiva(gIbsCbs.gIBSUF.gRed), gIbsCbs?.gIBSUF?.vIBSUF,
+                        gIbsCbs?.gIBSMun?.pIBSMun.ObterAliquotaEfetiva(gIbsCbs.gIBSMun.gRed), gIbsCbs?.gIBSMun?.vIBSMun,
+                        gIbsCbs?.gCBS?.pCBS.ObterAliquotaEfetiva(gIbsCbs.gCBS.gRed), gIbsCbs?.gCBS?.vCBS,
+                        isItem?.pIS, isItem?.vIS));
+
             });
 
             #endregion
@@ -351,18 +372,29 @@ namespace NFe.Danfe.Html.Dominio
 
             #region Imposto
 
-            Imposto = new Imposto(nfe.infNFe.total.ICMSTot.vBC, nfe.infNFe.total.ICMSTot.vICMS, nfe.infNFe.total.ICMSTot.vBCST,
-                    nfe.infNFe.total.ICMSTot.vST, nfe.infNFe.total.ICMSTot.vProd, nfe.infNFe.total.ICMSTot.vFrete,
-                    nfe.infNFe.total.ICMSTot.vSeg, nfe.infNFe.total.ICMSTot.vDesc, nfe.infNFe.total.ICMSTot.vOutro,
-                    nfe.infNFe.total.ICMSTot.vIPI, nfe.infNFe.total.ICMSTot.vNF,nfe.infNFe.total.ICMSTot.vTotTrib ?? 0,
-                    nfe.infNFe.total.ICMSTot.vPIS, nfe.infNFe.total.ICMSTot.vCOFINS, nfe.infNFe.total.ICMSTot.vICMSUFRemet,
-                    nfe.infNFe.total.ICMSTot.vICMSUFDest);
-            
+            var icmsTot = nfe.infNFe.total.ICMSTot;
+            var ibsCbsTot = nfe.infNFe.total.IBSCBSTot;
+            var isTot = nfe.infNFe.total.ISTot;
+            var gMono = ibsCbsTot?.gMono;
+            Imposto = new Imposto(icmsTot.vBC, icmsTot.vICMS, icmsTot.vBCST,
+                    icmsTot.vST, icmsTot.vProd, icmsTot.vFrete,
+                    icmsTot.vSeg, icmsTot.vDesc, icmsTot.vOutro,
+                    icmsTot.vIPI, icmsTot.vNF, icmsTot.vTotTrib ?? 0,
+                    icmsTot.vPIS, icmsTot.vCOFINS, icmsTot.vICMSUFRemet,
+                    icmsTot.vICMSUFDest,
+                    icmsTot.vFCP, icmsTot.vFCPST, icmsTot.vFCPUFDest, icmsTot.qBCMono, icmsTot.vICMSMono,
+                    icmsTot.qBCMonoReten, icmsTot.vICMSMonoReten,
+                    ibsCbsTot?.gCBS?.vCBS, ibsCbsTot?.gIBS?.gIBSUF?.vIBSUF, ibsCbsTot?.gIBS?.gIBSMun?.vIBSMun,
+                    isTot?.vIS,
+                    gMono?.vIBSMono, gMono?.vCBSMono, gMono?.vIBSMonoReten, gMono?.vCBSMonoReten,
+                    ibsCbsTot != null || isTot != null);
+
 
             
             #endregion
 
             Creditos = creditos;
+            QrCode = nfe.infNFeSupl?.qrCode;
             ISsqn = issqn;
             Chave = nfe.infNFe?.Id?.Replace("NFe", "");
             DataEmissao = nfe.infNFe.ide.dhEmi.ConverterFusoHorarioBrasil();  

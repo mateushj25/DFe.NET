@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using NetBarcode;
@@ -44,8 +45,6 @@ namespace NFe.Danfe.Html
 
         public readonly DanfeNFe _danfe;
 
-        private int _qtdLinhasPrimeiraPagina;
-        private int _qtdLinhasPaginaSubsequente;
 
         /// <inheritdoc />
         public Task<Documento> ObterDocHtmlAsync()
@@ -99,30 +98,69 @@ namespace NFe.Danfe.Html
             list.Add("[nl_company_ie]", danfeNFe.Emitente.Ie);
             list.Add("[nl_company_ie_st]", danfeNFe.IeSt ?? string.Empty);
             list.Add("[nl_company_cnpj_cpf]", CrossCutting.Utils.FormatarCnpjCpf(danfeNFe.Emitente.CnpjCpf));
+            list.Add("[ds_company_crt]", danfeNFe.Emitente.CrtDescricao);
+            //Tipo de Regime de Apuração do IBS e da CBS: campo reservado pela NT 2026.010, não há tag/ID publicada.
+            //Não imprimir conteúdo enquanto não houver definição da origem da informação.
+            var apuracaoIbsCbs = string.Empty;
+            list.Add("[ds_company_apuracao_ibs_cbs]", apuracaoIbsCbs);
+            //Sem valor: o quadro não é impresso
+            nfeHtml = RemoverBloco(nfeHtml, "apuracao", string.IsNullOrEmpty(apuracaoIbsCbs));
             return LerTemplateEsubstituirTags(nfeHtml, list);
         }
 
         private string MontarImposto(DanfeNFe danfeNFe, string nfeHtml)
         {
             var list = new Dictionary<string, string>();
-            list.Add("[tot_bc_icms]", danfeNFe.Imposto.vBCIMS.FormatarNumeroDanfe());
-            list.Add("[tot_icms]", danfeNFe.Imposto.vICMS.FormatarNumeroDanfe());
-            list.Add("[tot_bc_icms_st]", danfeNFe.Imposto.vBCICMSST?.FormatarNumeroDanfe());
-            list.Add("[tot_icms_st]", danfeNFe.Imposto.vICMSST?.FormatarNumeroDanfe());
-            list.Add("[tot_icms_fcp]", "0");
-            list.Add("[vl_total_prod]", danfeNFe.Imposto.vProd.FormatarNumeroDanfe());
-            list.Add("[vl_shipping]", danfeNFe.Imposto.vFrete.FormatarNumeroDanfe());
-            list.Add("[vl_insurance]", danfeNFe.Imposto.vSeg.FormatarNumeroDanfe());
-            list.Add("[vl_discount]", danfeNFe.Imposto.vDesc.FormatarNumeroDanfe());
-            list.Add("[vl_other_expense]", danfeNFe.Imposto.vOutro.FormatarNumeroDanfe());
-            list.Add("[tot_total_ipi_tax]", danfeNFe.Imposto.vIpi.FormatarNumeroDanfe());
-            list.Add("[vl_total]", danfeNFe.Imposto.vNF.FormatarNumeroDanfe());
-            list.Add("[ApproximateTax]", danfeNFe.Imposto.vTotTrib.FormatarNumeroDanfe());
-            list.Add("[tot_icms_pis]", danfeNFe.Imposto.vPis.FormatarNumeroDanfe());
-            list.Add("[tot_icms_cofins]", danfeNFe.Imposto.vCofins.FormatarNumeroDanfe());
-            list.Add("[vICMSUFRemet]", danfeNFe.Imposto.vICMSUFRemet?.FormatarNumeroDanfe());
-            list.Add("[vICMSUFDest]", danfeNFe.Imposto.vICMSUFDest?.FormatarNumeroDanfe());
-            list.Add("[vImport]", "");
+            var imposto = danfeNFe.Imposto;
+            var quadros = new QuadrosTotais(imposto);
+
+            //Campos facultativos: o quadro (marcadores ini_/fim_ do template) só é impresso quando o valor existir no XML
+            nfeHtml = RemoverBloco(nfeHtml, "tributo_aprox", !quadros.TributoAproximado);
+            nfeHtml = RemoverBloco(nfeHtml, "fcp", !quadros.Fcp);
+            nfeHtml = RemoverBloco(nfeHtml, "fcp_st", !quadros.FcpSt);
+            nfeHtml = RemoverBloco(nfeHtml, "difal", !quadros.Difal);
+            nfeHtml = RemoverBloco(nfeHtml, "fcp_uf_dest", !quadros.FcpUfDest);
+            nfeHtml = RemoverBloco(nfeHtml, "bc_icms_mono", !quadros.BcIcmsMono);
+            nfeHtml = RemoverBloco(nfeHtml, "icms_mono", !quadros.IcmsMono);
+            nfeHtml = RemoverBloco(nfeHtml, "bc_icms_mono_reten", !quadros.BcIcmsMonoReten);
+            nfeHtml = RemoverBloco(nfeHtml, "icms_mono_reten", !quadros.IcmsMonoReten);
+            nfeHtml = RemoverBloco(nfeHtml, "total_ibs_cbs_is", !quadros.PossuiIbsCbsIs);
+            nfeHtml = RemoverBloco(nfeHtml, "ibs_mono", !quadros.IbsMono);
+            nfeHtml = RemoverBloco(nfeHtml, "cbs_mono", !quadros.CbsMono);
+            nfeHtml = RemoverBloco(nfeHtml, "ibs_mono_reten", !quadros.IbsMonoReten);
+            nfeHtml = RemoverBloco(nfeHtml, "cbs_mono_reten", !quadros.CbsMonoReten);
+
+            //Total dos produtos e total da nota
+            list.Add("[vl_total_prod]", FormatarTotal(imposto.vProd));
+            list.Add("[vl_shipping]", FormatarTotal(imposto.vFrete));
+            list.Add("[vl_insurance]", FormatarTotal(imposto.vSeg));
+            list.Add("[vl_discount]", FormatarTotal(imposto.vDesc));
+            list.Add("[vl_other_expense]", FormatarTotal(imposto.vOutro));
+            list.Add("[vl_total]", FormatarTotal(imposto.vNF));
+            list.Add("[vl_total_tax_approx]", FormatarTotal(imposto.vTotTrib));
+            //Total do ICMS / IPI
+            list.Add("[tot_bc_icms]", FormatarTotal(imposto.vBCIMS));
+            list.Add("[tot_icms]", FormatarTotal(imposto.vICMS));
+            list.Add("[tot_bc_icms_st]", FormatarTotal(imposto.vBCICMSST));
+            list.Add("[tot_icms_st]", FormatarTotal(imposto.vICMSST));
+            list.Add("[tot_total_ipi_tax]", FormatarTotal(imposto.vIpi));
+            list.Add("[tot_icms_fcp]", FormatarTotal(imposto.vFCP));
+            list.Add("[tot_icms_fcp_st]", FormatarTotal(imposto.vFCPST));
+            list.Add("[tot_icms_difal]", FormatarTotal(imposto.vICMSUFDest));
+            list.Add("[tot_icms_fcp_uf_dest]", FormatarTotal(imposto.vFCPUFDest));
+            list.Add("[tot_bc_icms_mono]", FormatarTotal(imposto.qBCMono));
+            list.Add("[tot_icms_mono]", FormatarTotal(imposto.vICMSMono));
+            list.Add("[tot_bc_icms_mono_reten]", FormatarTotal(imposto.qBCMonoReten));
+            list.Add("[tot_icms_mono_reten]", FormatarTotal(imposto.vICMSMonoReten));
+            //Total do IBS / CBS / IS (NT 2026.010). Sem o grupo correspondente no XML o campo sai em branco, sem inferir valor
+            list.Add("[tot_cbs]", FormatarTotal(imposto.vCBS));
+            list.Add("[tot_ibs_uf]", FormatarTotal(imposto.vIBSUF));
+            list.Add("[tot_ibs_mun]", FormatarTotal(imposto.vIBSMun));
+            list.Add("[tot_is]", FormatarTotal(imposto.vIS));
+            list.Add("[tot_ibs_mono]", FormatarTotal(imposto.vIBSMono));
+            list.Add("[tot_cbs_mono]", FormatarTotal(imposto.vCBSMono));
+            list.Add("[tot_ibs_mono_reten]", FormatarTotal(imposto.vIBSMonoReten));
+            list.Add("[tot_cbs_mono_reten]", FormatarTotal(imposto.vCBSMonoReten));
             //ISSQN
             var imIssqn = danfeNFe.ISsqn?.Im;
             var totalServIssqn = danfeNFe.ISsqn?.ValorIssqn;
@@ -133,6 +171,90 @@ namespace NFe.Danfe.Html
             list.Add("[tot_bc_issqn]", baseCalcIssqn?.ToString());
             list.Add("[tot_issqn]", totalIssqn?.ToString());
             return LerTemplateEsubstituirTags(nfeHtml, list);
+        }
+
+        private static string Milimetros(double valor)
+        {
+            return valor.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private static string FormatarTotal(decimal? valor)
+        {
+            return valor?.FormatarNumeroDanfe() ?? string.Empty;
+        }
+
+        /// <summary>
+        ///     Quais campos facultativos dos quadros de totais existem no XML (NT 2026.010). Usado para suprimir os campos
+        ///     sem valor no HTML e para estimar a altura dos quadros na paginação
+        /// </summary>
+        private sealed class QuadrosTotais
+        {
+            public QuadrosTotais(Imposto imposto)
+            {
+                TributoAproximado = imposto.vTotTrib > 0;
+                Fcp = imposto.vFCP.HasValue;
+                FcpSt = imposto.vFCPST.HasValue;
+                Difal = imposto.vICMSUFDest.HasValue;
+                FcpUfDest = imposto.vFCPUFDest.HasValue;
+                BcIcmsMono = imposto.qBCMono.HasValue;
+                IcmsMono = imposto.vICMSMono.HasValue;
+                BcIcmsMonoReten = imposto.qBCMonoReten.HasValue;
+                IcmsMonoReten = imposto.vICMSMonoReten.HasValue;
+                PossuiIbsCbsIs = imposto.PossuiTotaisIbsCbsIs;
+                IbsMono = PossuiIbsCbsIs && imposto.vIBSMono.HasValue;
+                CbsMono = PossuiIbsCbsIs && imposto.vCBSMono.HasValue;
+                //Retenção: somente quando houver tributação monofásica sujeita a retenção
+                IbsMonoReten = PossuiIbsCbsIs && imposto.vIBSMonoReten > 0;
+                CbsMonoReten = PossuiIbsCbsIs && imposto.vCBSMonoReten > 0;
+            }
+
+            public bool TributoAproximado { get; }
+            public bool Fcp { get; }
+            public bool FcpSt { get; }
+            public bool Difal { get; }
+            public bool FcpUfDest { get; }
+            public bool BcIcmsMono { get; }
+            public bool IcmsMono { get; }
+            public bool BcIcmsMonoReten { get; }
+            public bool IcmsMonoReten { get; }
+            public bool PossuiIbsCbsIs { get; }
+            public bool IbsMono { get; }
+            public bool CbsMono { get; }
+            public bool IbsMonoReten { get; }
+            public bool CbsMonoReten { get; }
+
+            /// <summary>
+            ///     Linhas do quadro "Total dos produtos e total da nota"
+            /// </summary>
+            public int LinhasProdutos => 2;
+
+            /// <summary>
+            ///     Linhas do quadro "Total do ICMS / IPI": a primeira com 5 campos fixos e as demais com 4 facultativos
+            /// </summary>
+            public int LinhasIcmsIpi
+            {
+                get
+                {
+                    var facultativos = new[]
+                    {
+                        Fcp, FcpSt, Difal, FcpUfDest, BcIcmsMono, IcmsMono, BcIcmsMonoReten, IcmsMonoReten
+                    }.Count(c => c);
+                    return 1 + (int) Math.Ceiling(facultativos / 4.0);
+                }
+            }
+
+            /// <summary>
+            ///     Linhas do quadro "Total do IBS / CBS / IS" (4 campos por linha; zero quando o quadro não é impresso)
+            /// </summary>
+            public int LinhasIbsCbsIs
+            {
+                get
+                {
+                    if (!PossuiIbsCbsIs) return 0;
+                    var campos = 4 + new[] {IbsMono, CbsMono, IbsMonoReten, CbsMonoReten}.Count(c => c);
+                    return (int) Math.Ceiling(campos / 4.0);
+                }
+            }
         }
 
         private string MontarFaturas(DanfeNFe danfeNFe, string nfeHtml)
@@ -175,18 +297,37 @@ namespace NFe.Danfe.Html
 
         private string MontarItensFaturas(DanfeNFe danfeNFe)
         {
+            //Grade com 3 duplicatas por linha, cada uma com FATURA/DUPLICATA, VENCIMENTO e VALOR (modelo da NT 2026.010)
+            const int duplicatasPorLinha = 3;
             var str = new StringBuilder();
-            var pipe = danfeNFe.Faturas.Count > 1 ? " | " : "";
-            foreach (var item in danfeNFe.Faturas)
+            str.Append("<table cellpadding=\"0\" cellspacing=\"0\" class=\"border-table\" style=\"table-layout: fixed\"><tbody>");
+            var faturas = danfeNFe.Faturas.ToList();
+            for (var i = 0; i < faturas.Count; i += duplicatasPorLinha)
             {
-                var str1 = $"<strong>N Fat.º: {item.NumFatura} </strong> &nbsp";
-                var str2 = $"<strong>Vencimento: {item.DataVencimento:dd/MM/yyyy} </strong> &nbsp";
-                var str3 = $"<strong>Valor: {item.Valor.FormatarNumeroDanfe()} </strong> &nbsp";
-                str.Append($"{str1} {str2} {str3} {pipe}");
+                str.Append("<tr>");
+                for (var j = 0; j < duplicatasPorLinha; j++)
+                {
+                    var indice = i + j;
+                    if (indice < faturas.Count)
+                    {
+                        var item = faturas[indice];
+                        str.Append($"<td style=\"width: 13.3%\"><span class=\"nf-label\">FATURA/DUPLICATA</span><span class=\"info\">{WebUtility.HtmlEncode(item.NumFatura)}</span></td>");
+                        str.Append($"<td style=\"width: 11%\"><span class=\"nf-label\">VENCIMENTO</span><span class=\"info\">{item.DataVencimento:dd/MM/yyyy}</span></td>");
+                        str.Append($"<td style=\"width: 9%\"><span class=\"nf-label\">VALOR</span><span class=\"info\">{item.Valor.FormatarNumeroDanfe()}</span></td>");
+                    }
+                    else
+                    {
+                        str.Append("<td style=\"width: 13.3%; border: 0\"></td><td style=\"width: 11%; border: 0\"></td><td style=\"width: 9%; border: 0\"></td>");
+                    }
+                }
+
+                str.Append("</tr>");
             }
 
+            str.Append("</tbody></table>");
             return str.ToString();
         }
+
 
         private string MontarCodigoBarras(string nFeId)
         {
@@ -197,7 +338,7 @@ namespace NFe.Danfe.Html
         {
             var list = new Dictionary<string, string>();
             var endereco = "";
-            var tipoFrete = "0";
+            var tipoFrete = "";
             var bairro = "";
             var cep = "";
             var cidade = "";
@@ -212,7 +353,7 @@ namespace NFe.Danfe.Html
             if (danfeNFe.Transportadora != null)
             {
                 endereco = $"{danfeNFe.Transportadora?.Endereco.NomeEnd} {danfeNFe.Transportadora?.Endereco.Num}";
-                tipoFrete = danfeNFe.Transportadora?.FretePorConta == "Emitente" ? "0" : "1";
+                tipoFrete = DescreverFretePorConta(danfeNFe.Transportadora.FretePorConta);
                 bairro = $"{danfeNFe.Transportadora?.Endereco.Bairro}";
                 cep = $"{danfeNFe.Transportadora?.Endereco.Cep}";
                 cidade = $"{danfeNFe.Transportadora?.Endereco.Cidade}";
@@ -250,10 +391,37 @@ namespace NFe.Danfe.Html
             return LerTemplateEsubstituirTags(nfeHtml, list);
         }
 
-        private string MontarInformacoesAdicionais(DanfeNFe danfeNFe, string nfeHtml)
+        /// <summary>
+        ///     Frete por conta no formato "código - descrição" (NT 2026.010, modBC da NF-e 4.00: modFrete)
+        /// </summary>
+        private static string DescreverFretePorConta(string fretePorConta)
+        {
+            switch (fretePorConta)
+            {
+                case "Emitente":
+                case "Remet/Dest":
+                    return "0 - Remetente";
+                case "Destinatário":
+                    return "1 - Destinatário";
+                case "Terceiros":
+                    return "2 - Terceiros";
+                case "Remetente":
+                    return "3 - Próprio Remetente";
+                case "Próprio Destinatário":
+                    return "4 - Próprio Destinatário";
+                case "Sem Frete":
+                    return "9 - Sem Frete";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        private string MontarInformacoesAdicionais(string informacoesComplementares, string nfeHtml)
         {
             var list = new Dictionary<string, string>();
-            list.Add("[ds_additional_information]", danfeNFe.Inf.InfComplementares);
+            list.Add("[ds_additional_information]", informacoesComplementares);
+            //QR Code: não é impresso. A NT 2026.010 prevê NT futura com as regras de formação do QR Code do modelo 55
+            //(danfeNFe.QrCode já está mapeado para uso futuro)
             return LerTemplateEsubstituirTags(nfeHtml, list);
         }
 
@@ -264,91 +432,204 @@ namespace NFe.Danfe.Html
             return LerTemplateEsubstituirTags(nfeHtml, list);
         }
 
+        #region Paginação
+
+        //Alturas em milímetros, medidas na renderização A4 do leiaute (NT 2026.010). A página inicial varia conforme os
+        //quadros presentes (fatura, transportador, ISSQN, linhas de totais) e o espaço restante é dado à tabela de itens.
+        private const double AlturaTituloQuadroMm = 4.2;
+        private const double AlturaLinhaTotalMm = 7.4;
+        private const double AlturaQuadroTransportadorMm = 29.5;
+        private const double AlturaQuadroIssqnMm = 11.5;
+        private const double AlturaCabecalhoTabelaItensMm = 6.5;
+        private const double AlturaBaseCaixaItensMm = 64;
+        private const double AlturaQuadrosBaseMm = 49.6;
+        private const double MargemSegurancaMm = 4;
+        private const double AlturaItensPaginaSubsequenteMm = 165;
+        private const double AlturaLinhaTextoMm = 2.04;
+        private const double AlturaPaddingLinhaItemMm = 1.06;
+        private const double AlturaLinhaRotuloValorMm = 2.25;
+
+        private const double AlturaReservaFiscoMm = 24;
+        private const double AlturaReservaFiscoMinimaMm = 9;
+
         /// <summary>
-        ///     Obtem a quantidade maxima de linhas de produtos na primeira pagina
-        ///     <para>Quanto maior a quantidade de caracteres menor é a quantidade de linhas na primeira pagina</para>
+        ///     Medidas (mm) da primeira página, calculadas conforme os quadros presentes
         /// </summary>
-        /// <param name="produtos"></param>
-        /// <returns></returns>
-        private int ObterQuantidadeLinhasPrimeiraPagina(IList<Produto> produtos)
+        private sealed class LayoutPrimeiraPagina
         {
-            var maximoLinhaMaiorCaracteres = 7;
-            var maximoLinhaMenorCaracteres = 12;
-            if (_qtdLinhasPrimeiraPagina != 0) return _qtdLinhasPrimeiraPagina;
-
-            //Para 1ª pagina se a maioria das descrições de produtos contiver 53 caracteres ou menos,
-            //então admiti-se 10 linhas,9 linhas para maiores de 53 caractesres ou menores que 120 caracteres 
-            //Para facilitar a conta basta somar a quantidade de caracteres pela quantidade de produtos destacada em cada pagina
-
-            //Obter quantidade de caracteres 
-            var qtdCaracteresPrimeiraPagina =
-                    ObterQuantidadeCaracteresCampoDescricaoProduto(produtos, 0, maximoLinhaMenorCaracteres);
-            if (qtdCaracteresPrimeiraPagina <= 800)
+            public LayoutPrimeiraPagina(double alturaCaixaItensMm, double alturaReservaFiscoMm)
             {
-                _qtdLinhasPrimeiraPagina = maximoLinhaMenorCaracteres;
-                return maximoLinhaMenorCaracteres;
+                AlturaCaixaItensMm = alturaCaixaItensMm;
+                AlturaReservaFiscoMm = alturaReservaFiscoMm;
             }
 
-            //O numero de caracteres é muito alto, então cabem apenas 9 linhas na primeira pagina
-            _qtdLinhasPrimeiraPagina = maximoLinhaMaiorCaracteres;
-            return maximoLinhaMaiorCaracteres;
+            /// <summary>
+            ///     Altura da caixa da tabela de itens: o que sobra da página depois dos quadros presentes
+            /// </summary>
+            public double AlturaCaixaItensMm { get; }
+
+            /// <summary>
+            ///     Altura do quadro RESERVADO AO FISCO e do campo de informações complementares. Encolhe quando os quadros
+            ///     presentes não deixam espaço para a tabela de itens, para que a página inicial caiba em uma folha A4
+            /// </summary>
+            public double AlturaReservaFiscoMm { get; }
+        }
+
+        private LayoutPrimeiraPagina CalcularLayoutPrimeiraPagina(DanfeNFe danfeNfe)
+        {
+            var quadros = new QuadrosTotais(danfeNfe.Imposto);
+            var usado = AlturaTituloQuadroMm + quadros.LinhasProdutos * AlturaLinhaTotalMm;
+            usado += AlturaTituloQuadroMm + quadros.LinhasIcmsIpi * AlturaLinhaTotalMm;
+            if (quadros.LinhasIbsCbsIs > 0) usado += AlturaTituloQuadroMm + quadros.LinhasIbsCbsIs * AlturaLinhaTotalMm;
+            if (PossuiFatura(danfeNfe))
+                usado += AlturaTituloQuadroMm + Math.Ceiling(danfeNfe.Faturas.Count / 3.0) * AlturaLinhaTotalMm;
+            if (PossuiTransportador(danfeNfe)) usado += AlturaQuadroTransportadorMm;
+            if (PossuiIssqn(danfeNfe)) usado += AlturaQuadroIssqnMm;
+
+            var altura = AlturaBaseCaixaItensMm - (usado - AlturaQuadrosBaseMm) - MargemSegurancaMm;
+            var excesso = Math.Max(0, AlturaCabecalhoTabelaItensMm - altura);
+            return new LayoutPrimeiraPagina(Math.Max(altura, AlturaCabecalhoTabelaItensMm),
+                    Math.Max(AlturaReservaFiscoMinimaMm, AlturaReservaFiscoMm - excesso));
         }
 
         /// <summary>
-        ///     Obtem a quantidade maxima de linhas de produtos das paginas subsequentes à primeira
-        ///     <para>Quanto maior a quantidade de caracteres menor é a quantidade de linhas na pagina</para>
+        ///     Estima a altura (mm) da linha do produto na tabela de itens
         /// </summary>
-        /// <param name="produtos"></param>
-        /// <returns></returns>
-        private int ObterQuantidadeLinhasPaginasSubsequentes(IList<Produto> produtos)
+        private double EstimarAlturaLinhaProdutoMm(Produto produto, FormatoColunasItens formato)
         {
-            var maximoLinhaMaiorCaracteres = 24;
-            var maximoLinhaMenorCaracteres = 50;
-            if (_qtdLinhasPaginaSubsequente != 0) return _qtdLinhasPaginaSubsequente;
+            var tamanhoDescricao = Math.Min(120, $"{produto.Codigo} - {produto.Descricao}".Length);
+            var linhasDescricao = (int) Math.Ceiling(tamanhoDescricao / 38.0);
+            var linhasInfAdic = string.IsNullOrWhiteSpace(produto.InfAdic)
+                    ? 0
+                    : (int) Math.Ceiling(Math.Min(150, produto.InfAdic.Length) / 45.0);
+            var linhasTextoItem = linhasDescricao + linhasInfAdic + 1; //+1: NCM / cClassTrib
 
-            //Para 2ª pagina se a maioria das descrições de produtos contiver 53 caracteres ou menos,
-            //então,admiti-se 50 linhas por pagina, 24 linhas para maiores de 53 caractesres ou menores que 120 caractesres
-            //Para facilitar a conta basta somar a quantidade de caracteres pela quantidade de produtos destacada em cada pagina
+            var linhasBases = 3 + (produto.BaseCalculoIbsCbs.HasValue ? 1 : 0); //ICMS, IS e IPI sempre + IBS/CBS
+            var linhasAliquotas = formato.AliquotasEmpilhadas ? 6 : 3;
+            var linhasValores = formato.ValoresEmpilhados ? 6 : 3;
+            //As colunas de rótulo/valor (rtc-lin) têm line-height de 1,25em em 5 pt (~2,25 mm por linha)
+            var alturaTexto = linhasTextoItem * AlturaLinhaTextoMm;
+            var alturaColunas = Math.Max(linhasBases, Math.Max(linhasAliquotas, linhasValores)) * AlturaLinhaRotuloValorMm;
+            return Math.Max(alturaTexto, alturaColunas) + AlturaPaddingLinhaItemMm;
+        }
 
-            //Obter quantidade de caracteres dos 10 primeiros registros
-            var qtdMaxPrimeiraPagina = ObterQuantidadeLinhasPrimeiraPagina(produtos);
-            var qtdCaracteresPrimeiraPagina =
-                    ObterQuantidadeCaracteresCampoDescricaoProduto(produtos, qtdMaxPrimeiraPagina, maximoLinhaMenorCaracteres);
-            // 53 caracteres por linha multiplicado pela quantidade maxima de linhas, 50
-            if (qtdCaracteresPrimeiraPagina <= 3000)
+        /// <summary>
+        ///     Distribui os produtos nas páginas conforme a altura estimada de cada linha. A primeira página pode ficar sem
+        ///     itens quando os quadros presentes ocupam todo o espaço
+        /// </summary>
+        private List<List<Produto>> DividirProdutosEmPaginas(DanfeNFe danfeNfe, double alturaCaixaPrimeiraPaginaMm,
+                FormatoColunasItens formato)
+        {
+            var paginas = new List<List<Produto>> {new List<Produto>()};
+            var limite = alturaCaixaPrimeiraPaginaMm - AlturaCabecalhoTabelaItensMm;
+            var usado = 0.0;
+            foreach (var produto in danfeNfe.Produtos)
             {
-                _qtdLinhasPaginaSubsequente = maximoLinhaMenorCaracteres;
-                return maximoLinhaMenorCaracteres;
+                var altura = EstimarAlturaLinhaProdutoMm(produto, formato);
+                if (usado + altura > limite && (paginas.Count == 1 || paginas[paginas.Count - 1].Count > 0))
+                {
+                    paginas.Add(new List<Produto>());
+                    limite = AlturaItensPaginaSubsequenteMm;
+                    usado = 0;
+                }
+
+                paginas[paginas.Count - 1].Add(produto);
+                usado += altura;
             }
 
-            //O numero de caracteres é muito alto, então cabem apenas 24 linhas nas paginas subsequentes à primeira
-            _qtdLinhasPaginaSubsequente = maximoLinhaMaiorCaracteres;
-            return maximoLinhaMaiorCaracteres;
+            return paginas;
         }
 
-        private int ObterQuantidadeCaracteresCampoDescricaoProduto(IList<Produto> produtos, int skip, int take)
+        private const double AlturaRotuloInfComplMm = 4.5;
+        private const int CaracteresPorLinhaInfComplPrimeiraPagina = 125;
+        private const int CaracteresPorLinhaInfComplPaginaCheia = 190;
+
+        /// <summary>
+        ///     Separa o texto em duas partes: a que cabe em <paramref name="maxLinhas" /> linhas (estimadas pela quebra por
+        ///     palavras) e o restante
+        /// </summary>
+        private static void DividirTextoPorLinhas(string texto, int maxLinhas, int caracteresPorLinha, out string parte,
+                out string resto)
         {
-            var list = produtos.Skip(skip).Take(take);
-            var quantidadeCaracteres = list.Sum(n => n.Descricao.Length);
-            return quantidadeCaracteres;
+            parte = texto ?? string.Empty;
+            resto = string.Empty;
+            if (string.IsNullOrWhiteSpace(texto)) return;
+
+            var linhas = 1;
+            var coluna = 0;
+            var consumido = 0;
+            foreach (System.Text.RegularExpressions.Match palavra in System.Text.RegularExpressions.Regex.Matches(texto,
+                             @"\S+\s*"))
+            {
+                var tamanho = palavra.Value.TrimEnd().Length;
+                var linhasPalavra = linhas;
+                var colunaPalavra = coluna;
+                if (colunaPalavra > 0 && colunaPalavra + tamanho > caracteresPorLinha)
+                {
+                    linhasPalavra++;
+                    colunaPalavra = 0;
+                }
+
+                linhasPalavra += (tamanho - 1) / caracteresPorLinha;
+                colunaPalavra = (colunaPalavra + palavra.Value.Length) % caracteresPorLinha;
+                if (linhasPalavra > maxLinhas) break;
+                linhas = linhasPalavra;
+                coluna = colunaPalavra;
+                consumido = palavra.Index + palavra.Length;
+            }
+
+            if (consumido >= texto.Length) return;
+            parte = texto.Substring(0, consumido).TrimEnd();
+            resto = texto.Substring(consumido).TrimStart();
         }
 
         /// <summary>
-        ///     Obtem a quantidade maxima de paginas com base na quantidade de produtos
+        ///     Distribui o restante das informações complementares nas folhas seguintes: na última folha de itens, se houver
+        ///     espaço, e em folhas adicionais (acrescentadas a <paramref name="paginas" />) para o que sobrar.
+        ///     Retorna o texto de continuação de cada página (null quando não houver)
         /// </summary>
-        /// <param name="produtos"></param>
-        /// <returns></returns>
-        private int ObterQuantidadeMaximaPaginas(IList<Produto> produtos)
+        private List<string> DistribuirContinuacaoInfComplementares(List<List<Produto>> paginas, string restante,
+                FormatoColunasItens formato)
         {
-            var quantidaProdutos = produtos.Count();
-            var qtdLinhasPrimeiraPagina = ObterQuantidadeLinhasPrimeiraPagina(produtos);
-            var qtdLinhasPaginasSubsequentes = ObterQuantidadeLinhasPaginasSubsequentes(produtos);
-            int totalProdutosMenosPrimeiraPagina = quantidaProdutos - qtdLinhasPrimeiraPagina;
-            int quantidadeMaximaPaginas =
-                    (int) Math.Ceiling((double) totalProdutosMenosPrimeiraPagina / qtdLinhasPaginasSubsequentes);
-            int totalPaginas = quantidadeMaximaPaginas + 1; // 1 é contando com a primeira pagina
-            return totalPaginas;
+            var continuacoes = paginas.Select(p => (string) null).ToList();
+            if (string.IsNullOrWhiteSpace(restante)) return continuacoes;
+
+            const double alturaTituloEQuadro = AlturaTituloQuadroMm + AlturaRotuloInfComplMm + 1;
+            if (paginas.Count > 1)
+            {
+                var usado = paginas[paginas.Count - 1].Sum(p => EstimarAlturaLinhaProdutoMm(p, formato));
+                var linhasDisponiveis = (int) Math.Floor(
+                        (AlturaItensPaginaSubsequenteMm - MargemSegurancaMm - usado - alturaTituloEQuadro) / AlturaLinhaTextoMm);
+                if (linhasDisponiveis >= 3)
+                {
+                    DividirTextoPorLinhas(restante, linhasDisponiveis, CaracteresPorLinhaInfComplPaginaCheia, out var parte,
+                            out restante);
+                    continuacoes[continuacoes.Count - 1] = parte;
+                }
+            }
+
+            var linhasPaginaCheia = (int) Math.Floor(
+                    (AlturaItensPaginaSubsequenteMm - MargemSegurancaMm - alturaTituloEQuadro) / AlturaLinhaTextoMm);
+            while (!string.IsNullOrWhiteSpace(restante))
+            {
+                DividirTextoPorLinhas(restante, linhasPaginaCheia, CaracteresPorLinhaInfComplPaginaCheia, out var parte,
+                        out restante);
+                paginas.Add(new List<Produto>());
+                continuacoes.Add(parte);
+            }
+
+            return continuacoes;
         }
+
+        private string MontarContinuacaoInfComplementares(string texto)
+        {
+            return "<p class=\"area-name\">Dados adicionais</p>"
+                   + "<table cellpadding=\"0\" cellspacing=\"0\" class=\"boxDadosAdicionais border-table\"><tbody><tr>"
+                   + "<td class=\"field infoComplementar\"><span class=\"nf-label\">INFORMAÇÕES COMPLEMENTARES (CONTINUAÇÃO)</span>"
+                   + $"<span>{texto}</span></td></tr></tbody></table>";
+        }
+
+        #endregion
 
         /// <summary>
         /// </summary>
@@ -357,34 +638,35 @@ namespace NFe.Danfe.Html
         private string MontarDanfe(DanfeNFe danfeNfe)
         {
             var sbHtmlPage = new StringBuilder();
-            int paginaAtual = 1;
-            var qtdLinhasPrimeiraPagina = ObterQuantidadeLinhasPrimeiraPagina(danfeNfe.Produtos.ToList());
-            var qtdMaximaPaginas = ObterQuantidadeMaximaPaginas(danfeNfe.Produtos.ToList());
-            var listaProdutosPrimeiraPagina = danfeNfe.Produtos.Take(qtdLinhasPrimeiraPagina).ToList();
-            var primeiraPagina =
-                    MontarPaginaInicial(listaProdutosPrimeiraPagina, paginaAtual.ToString(), qtdMaximaPaginas.ToString());
+            var formato = CalcularFormatoColunasItens(danfeNfe);
+            var layout = CalcularLayoutPrimeiraPagina(danfeNfe);
+            var paginas = DividirProdutosEmPaginas(danfeNfe, layout.AlturaCaixaItensMm, formato);
+
+            //Informações complementares: o que não couber no quadro da primeira folha continua nas folhas seguintes (MOC 7.0 Anexo II, itens 3.1.8 e 3.5)
+            var linhasPrimeiraPagina = Math.Max(1,
+                    (int) Math.Floor((layout.AlturaReservaFiscoMm - AlturaRotuloInfComplMm - 0.5) / AlturaLinhaTextoMm));
+            DividirTextoPorLinhas(danfeNfe.Inf?.InfComplementares, linhasPrimeiraPagina, CaracteresPorLinhaInfComplPrimeiraPagina,
+                    out var infComplPrimeiraPagina, out var infComplRestante);
+            var continuacoes = DistribuirContinuacaoInfComplementares(paginas, infComplRestante, formato);
+
+            var qtdMaximaPaginas = paginas.Count;
+            var primeiraPagina = MontarPaginaInicial(paginas[0], "1", qtdMaximaPaginas.ToString(), layout, formato,
+                    infComplPrimeiraPagina);
             primeiraPagina = MontarMarcaDagua(danfeNfe, primeiraPagina);
             if (qtdMaximaPaginas == 1)
             {
-                //var html2 = RemoveTag("[next-page]", primeiraPagina);
-                //return html2;
                 var html2 = FinalizarProcesso(primeiraPagina);
                 return html2;
             }
 
-            var qtdLinhasPaginasSubsequentes = ObterQuantidadeLinhasPaginasSubsequentes(danfeNfe.Produtos.ToList());
-            var skip = qtdLinhasPrimeiraPagina;
-
             //Proximas páginas
-            //qtdMaximaPaginas-1 ( menos a primeira pagina )
-            for (int pagina = 0; pagina < qtdMaximaPaginas - 1; pagina++)
+            for (var indicePagina = 1; indicePagina < qtdMaximaPaginas; indicePagina++)
             {
-                paginaAtual++;
-                var produtos = danfeNfe.Produtos.Skip(skip).Take(qtdLinhasPaginasSubsequentes).ToList();
-                var proximaPaginaHtml = MontarPaginaSubsequente(produtos, paginaAtual.ToString(), qtdMaximaPaginas.ToString());
+                var proximaPaginaHtml = MontarPaginaSubsequente(paginas[indicePagina], (indicePagina + 1).ToString(),
+                        qtdMaximaPaginas.ToString(), continuacoes[indicePagina], formato);
                 proximaPaginaHtml = MontarMarcaDagua(danfeNfe, proximaPaginaHtml);
                 //Adiciona a primeira pagina a 2ª pagina
-                if (pagina == 0)
+                if (indicePagina == 1)
                 {
                     var primeiraEsegundaPagina = AdicionarProximaPagina(primeiraPagina, proximaPaginaHtml);
                     sbHtmlPage.Append(primeiraEsegundaPagina);
@@ -397,8 +679,6 @@ namespace NFe.Danfe.Html
                     sbHtmlPage.Clear();
                     sbHtmlPage.Append(paginaSubseQuente);
                 }
-
-                skip += qtdLinhasPaginasSubsequentes;
             }
 
             var html3 = FinalizarProcesso(sbHtmlPage.ToString());
@@ -487,22 +767,26 @@ namespace NFe.Danfe.Html
         /// <param name="paginaAtual">Pagina atual</param>
         /// <param name="qtdPaginasTotal">Quantidade total de paginas</param>
         /// <returns></returns>
-        private string MontarPaginaInicial(List<Produto> produtos, string paginaAtual, string qtdPaginasTotal)
+        private string MontarPaginaInicial(List<Produto> produtos, string paginaAtual, string qtdPaginasTotal,
+                LayoutPrimeiraPagina layout, FormatoColunasItens formato, string informacoesComplementares)
         {
-            var htmlPagina = Resource.danfe_model_55_nfe_page_one;
+            var htmlPagina = Resource.danfe_model_55_nfe_page_one
+                    .Replace("[nu_altura_itens]", Milimetros(layout.AlturaCaixaItensMm))
+                    .Replace("[nu_altura_reserva_fisco]", Milimetros(layout.AlturaReservaFiscoMm))
+                    .Replace("[nu_altura_info_compl]", Milimetros(layout.AlturaReservaFiscoMm - AlturaRotuloInfComplMm));
             var str1 = MontarCanhotoRecibo(_danfe, htmlPagina);
             var str2 = MontarCabecalho(_danfe, str1, paginaAtual, qtdPaginasTotal);
             var str3 = MontarDestinatarioEmitente(_danfe, str2);
             var str4 = MontarFaturas(_danfe, str3);
             var str5 = MontarImposto(_danfe, str4);
             var str6 = MontarTransportadora(_danfe, str5);
-            var str7 = MontarInformacoesAdicionais(_danfe, str6);
+            var str7 = MontarInformacoesAdicionais(informacoesComplementares, str6);
             var str8 = MontarCreditos(_danfe, str7);
             var sbProdutoPagina1 = new StringBuilder();
             foreach (var item in produtos)
-                sbProdutoPagina1.Append(MontarLinhaTabelaProduto(item));
+                sbProdutoPagina1.Append(MontarLinhaTabelaProduto(item, formato));
             var str9 = MontarProduto(sbProdutoPagina1.ToString(), str8);
-            return str9;
+            return RemoverBlocosFacultativos(_danfe, str9);
         }
 
         /// <summary>
@@ -512,18 +796,61 @@ namespace NFe.Danfe.Html
         /// <param name="paginaAtual"></param>
         /// <param name="qtdPaginasTotal"></param>
         /// <returns></returns>
-        private string MontarPaginaSubsequente(List<Produto> produtos, string paginaAtual, string qtdPaginasTotal)
+        private string MontarPaginaSubsequente(List<Produto> produtos, string paginaAtual, string qtdPaginasTotal,
+                string continuacaoInfComplementares, FormatoColunasItens formato)
         {
-            if (!produtos.Any()) return "";
-            var htmlPagina = Resource.danfe_model_55_nfe_page_next;
+            var possuiContinuacao = !string.IsNullOrWhiteSpace(continuacaoInfComplementares);
+            if (!produtos.Any() && !possuiContinuacao) return "";
+            var htmlPagina = RemoverBloco(Resource.danfe_model_55_nfe_page_next, "itens", !produtos.Any())
+                    .Replace("[ds_additional_information_continuation]", possuiContinuacao
+                            ? MontarContinuacaoInfComplementares(continuacaoInfComplementares)
+                            : string.Empty);
             var strNext2 = MontarCabecalho(_danfe, htmlPagina, paginaAtual, qtdPaginasTotal);
             var strNext3 = MontarDestinatarioEmitente(_danfe, strNext2);
             var strNext8 = MontarCreditos(_danfe, strNext3);
             var sbProdutoPagina1 = new StringBuilder();
             foreach (var item in produtos)
-                sbProdutoPagina1.Append(MontarLinhaTabelaProduto(item));
+                sbProdutoPagina1.Append(MontarLinhaTabelaProduto(item, formato));
             var str9 = MontarProduto(sbProdutoPagina1.ToString(), strNext8);
             return str9;
+        }
+
+        /// <summary>
+        ///     Remove os quadros facultativos (NT 2026.010 item 4.4) quando não há informação no XML a apresentar.
+        ///     Os marcadores <!--[ini_xxx]--> e <!--[fim_xxx]--> do template são sempre removidos
+        /// </summary>
+        private string RemoverBlocosFacultativos(DanfeNFe danfeNFe, string html)
+        {
+            html = RemoverBloco(html, "fatura", !PossuiFatura(danfeNFe));
+            html = RemoverBloco(html, "transporte", !PossuiTransportador(danfeNFe));
+            html = RemoverBloco(html, "issqn", !PossuiIssqn(danfeNFe));
+            return html;
+        }
+
+        private static bool PossuiFatura(DanfeNFe danfeNFe)
+        {
+            return danfeNFe.Faturas != null && danfeNFe.Faturas.Count > 0;
+        }
+
+        private static bool PossuiTransportador(DanfeNFe danfeNFe)
+        {
+            return danfeNFe.Transportadora != null || (danfeNFe.Volumes != null && danfeNFe.Volumes.Count > 0);
+        }
+
+        private static bool PossuiIssqn(DanfeNFe danfeNFe)
+        {
+            return danfeNFe.ISsqn != null;
+        }
+
+        private string RemoverBloco(string html, string nome, bool remover)
+        {
+            var inicio = $"<!--[ini_{nome}]-->";
+            var fim = $"<!--[fim_{nome}]-->";
+            var indiceInicio = html.IndexOf(inicio, StringComparison.Ordinal);
+            var indiceFim = html.IndexOf(fim, StringComparison.Ordinal);
+            if (indiceInicio < 0 || indiceFim < indiceInicio) return html;
+            if (remover) return html.Remove(indiceInicio, indiceFim + fim.Length - indiceInicio);
+            return html.Remove(indiceFim, fim.Length).Remove(indiceInicio, inicio.Length);
         }
 
         private string MontarProduto(string linhasTabelaProduto, string nfeHtml)
@@ -538,59 +865,173 @@ namespace NFe.Danfe.Html
         /// </summary>
         /// <param name="produto"></param>
         /// <returns></returns>
-        private string MontarLinhaTabelaProduto(Produto produto)
+        private string MontarLinhaTabelaProduto(Produto produto, FormatoColunasItens formato)
         {
-            var list = new Dictionary<string, string>();
-            list.Add("[code]", "");
-            list.Add("[nome]", "");
-            list.Add("[ncm]", "");
-            list.Add("[cst]", "");
-            list.Add("[cfop]", "");
-            list.Add("[und]", "");
-            list.Add("[qtd]", "");
-            list.Add("[valorUnit]", "");
-            list.Add("[valorTot]", "");
-            list.Add("[baseicms]", "");
-            list.Add("[valoricms]", "");
-            list.Add("[valoripi]", "");
-            list.Add("[aliqicms]", "");
-            list.Add("[aliqipi]", "");
-            var strProductHtml = @"
-            <tr>
-            <td>[code]</td>
-            <td>[nome]</td>
-            <td>[ncm]</td>
-            <td>[cst]</td>
-            <td>[cfop]</td>
-            <td>[und]</td>
-            <td>[qtd]</td>
-            <td>[valorUnit]</td>
-            <td>[valorTot]</td>
-            <td>[baseicms]</td>
-            <td>[valoricms]</td>
-            <td>[valoripi]</td>
-            <td>[aliqicms]</td>
-            <td>[aliqipi]</td>
-            </tr>";
+            var descricao = WebUtility.HtmlEncode($"{produto.Codigo} - {produto.Descricao}".Truncar(120));
+            var infAdic = string.IsNullOrWhiteSpace(produto.InfAdic)
+                    ? string.Empty
+                    : $"<span class=\"rtc-inf\">{WebUtility.HtmlEncode(produto.InfAdic.Truncar(150))}</span>";
+            var classificacao = $"[NCM {produto.Ncm}]";
+            if (!string.IsNullOrWhiteSpace(produto.CClassTrib))
+                classificacao += $" [cClassTrib {produto.CClassTrib}]";
+
             var sb = new StringBuilder();
-            list["[code]"] = produto.Codigo;
-            list["[nome]"] = produto.Descricao.Truncar(120);
-            list["[ncm]"] = produto.Ncm;
-            list["[cst]"] = produto.Origem;
-            list["[cfop]"] = produto.Cfop;
-            list["[und]"] = produto.Unidade;
-            list["[qtd]"] = produto.Quantidade.FormatarNumeroQuantidadeDanfe();
-            list["[valorUnit]"] = produto.ValorUnitario.FormatarNumero();
-            list["[valorTot]"] = produto.ValorTotal.FormatarNumero();
-            list["[baseicms]"] = produto.BaseCalculo.FormatarNumero();
-            list["[valoricms]"] = produto.VIcms.FormatarNumero();
-            list["[valoripi]"] = produto.ValorIpi?.FormatarNumero();
-            list["[aliqicms]"] = produto.PIcms.FormatarNumero();
-            list["[aliqipi]"] = produto.PIpi?.FormatarNumero();
-            var result = Substituir(strProductHtml, list);
-            sb.Append(result);
+            sb.Append("<tr>");
+            sb.Append($"<td>{descricao}{infAdic}<span class=\"rtc-inf\">{WebUtility.HtmlEncode(classificacao)}</span></td>");
+            sb.Append(
+                    $"<td>{MontarLinhaRotuloValor("CST", produto.Origem)}{MontarLinhaRotuloValor("CFOP", produto.Cfop)}</td>");
+            sb.Append(
+                    $"<td>{MontarLinhaRotuloValor(null, produto.Quantidade.FormatarNumeroQuantidadeDanfe())}{MontarLinhaRotuloValor(null, produto.Unidade)}</td>");
+            sb.Append($"<td style=\"text-align: right; font-size: 5pt\">{produto.ValorUnitario.FormatarNumeroDanfe()}</td>");
+            sb.Append($"<td style=\"text-align: right; font-size: 5pt\">{produto.ValorTotal.FormatarNumeroDanfe()}</td>");
+
+            //Bases de cálculo
+            sb.Append($"<td{formato.EstiloBases}>");
+            sb.Append(MontarLinhaRotuloValor("ICMS", produto.BaseCalculo.FormatarNumeroDanfe()));
+            sb.Append(MontarLinhaRotuloValor("IBS / CBS", produto.BaseCalculoIbsCbs?.FormatarNumeroDanfe()));
+            sb.Append(MontarLinhaRotuloValor("IS", produto.BaseCalculoIs?.FormatarNumeroDanfe(), true));
+            sb.Append(MontarLinhaRotuloValor("IPI", produto.BaseCalculoIpi?.FormatarNumeroDanfe(), true));
+            sb.Append("</td>");
+
+            //Alíquotas
+            sb.Append($"<td{formato.EstiloAliquotas}>");
+            sb.Append(MontarPar(formato.AliquotasEmpilhadas, "ICMS", Percentual(produto.PIcms), "CBS", Percentual(produto.PCbs)));
+            sb.Append(MontarPar(formato.AliquotasEmpilhadas, "IBS UF", Percentual(produto.PIbsUf), "IPI", Percentual(produto.PIpi), false, true));
+            sb.Append(MontarPar(formato.AliquotasEmpilhadas, "IBS MUN", Percentual(produto.PIbsMun), "IS", Percentual(produto.PIs), false, true));
+            sb.Append("</td>");
+
+            //Valores dos tributos
+            sb.Append($"<td{formato.EstiloValores}>");
+            sb.Append(MontarPar(formato.ValoresEmpilhados, "ICMS", produto.VIcms.FormatarNumeroDanfe(), "CBS",
+                    produto.VCbs?.FormatarNumeroDanfe()));
+            sb.Append(MontarPar(formato.ValoresEmpilhados, "IBS UF", produto.VIbsUf?.FormatarNumeroDanfe(), "IPI",
+                    produto.ValorIpi?.FormatarNumeroDanfe(), false, true));
+            sb.Append(MontarPar(formato.ValoresEmpilhados, "IBS MUN", produto.VIbsMun?.FormatarNumeroDanfe(), "IS",
+                    produto.VIs?.FormatarNumeroDanfe(), false, true));
+            sb.Append("</td>");
+            sb.Append("</tr>");
             return sb.ToString();
         }
+
+        //Formato uniforme por coluna da tabela de itens: definido uma vez para todos os produtos da nota (todas as linhas
+        //de uma mesma coluna usam o mesmo tamanho de fonte e o mesmo formato)
+        private const double FonteMinimaColunaItensPt = 4;
+
+        /// <summary>
+        ///     Como as colunas de bases, alíquotas e valores dos tributos da tabela de itens são impressas
+        /// </summary>
+        private sealed class FormatoColunasItens
+        {
+            public FormatoColunasItens(bool aliquotasEmpilhadas, bool valoresEmpilhados, string estiloBases,
+                    string estiloAliquotas, string estiloValores)
+            {
+                AliquotasEmpilhadas = aliquotasEmpilhadas;
+                ValoresEmpilhados = valoresEmpilhados;
+                EstiloBases = estiloBases;
+                EstiloAliquotas = estiloAliquotas;
+                EstiloValores = estiloValores;
+            }
+
+            /// <summary>
+            ///     Cada par "ROTULO valor" das alíquotas ocupa uma linha (em vez de dois pares lado a lado)
+            /// </summary>
+            public bool AliquotasEmpilhadas { get; }
+
+            /// <summary>
+            ///     Cada par "ROTULO valor" dos valores dos tributos ocupa uma linha
+            /// </summary>
+            public bool ValoresEmpilhados { get; }
+
+            public string EstiloBases { get; }
+            public string EstiloAliquotas { get; }
+            public string EstiloValores { get; }
+        }
+
+        /// <summary>
+        ///     Define, olhando todos os produtos, como as colunas de bases, alíquotas e valores dos tributos são impressas.
+        ///     Quando os pares "ROTULO valor" lado a lado não cabem na coluna, cada par passa a ocupar uma linha (empilhado);
+        ///     só se ainda assim não couber a fonte é reduzida (mínimo de <see cref="FonteMinimaColunaItensPt" /> pt)
+        /// </summary>
+        private static FormatoColunasItens CalcularFormatoColunasItens(DanfeNFe danfeNfe)
+        {
+            int Maior(int acrescimo, Func<Produto, decimal?[]> campos) => danfeNfe.Produtos
+                    .SelectMany(campos).Where(v => v.HasValue)
+                    .Select(v => v.Value.FormatarNumeroDanfe().Length + acrescimo).DefaultIfEmpty(0).Max();
+
+            var bases = Maior(0, p => new[] {p.BaseCalculo, p.BaseCalculoIbsCbs, p.BaseCalculoIs, p.BaseCalculoIpi});
+            var aliquotas = Maior(1, p => new[] {p.PIcms, p.PCbs, p.PIbsUf, p.PIpi, p.PIbsMun, p.PIs});
+            var valores = Maior(0, p => new[] {p.VIcms, p.VCbs, p.VIbsUf, p.ValorIpi, p.VIbsMun, p.VIs});
+
+            var aliquotasEmpilhadas = aliquotas > CapacidadeAliquotasLadoALado;
+            var valoresEmpilhados = valores > CapacidadeValoresLadoALado;
+            return new FormatoColunasItens(aliquotasEmpilhadas, valoresEmpilhados,
+                    EstiloFonteColuna(bases, CapacidadeBases),
+                    EstiloFonteColuna(aliquotas,
+                            aliquotasEmpilhadas ? CapacidadeAliquotasEmpilhadas : CapacidadeAliquotasLadoALado),
+                    EstiloFonteColuna(valores, valoresEmpilhados ? CapacidadeValoresEmpilhados : CapacidadeValoresLadoALado));
+        }
+
+        //Quantidade de caracteres do maior valor que cabe na coluna com a fonte padrão (5 pt)
+        private const int CapacidadeBases = 20;
+        private const int CapacidadeAliquotasLadoALado = 6;
+        private const int CapacidadeAliquotasEmpilhadas = 12;
+        private const int CapacidadeValoresLadoALado = 13;
+        private const int CapacidadeValoresEmpilhados = 22;
+
+        /// <summary>
+        ///     Atributo style com a variável CSS --rtc-fs (fonte da coluna) quando o maior valor não cabe com a fonte padrão
+        /// </summary>
+        private static string EstiloFonteColuna(int maiorTexto, int capacidadeCaracteres)
+        {
+            if (maiorTexto <= capacidadeCaracteres) return string.Empty;
+            var fonte = Math.Max(FonteMinimaColunaItensPt, Math.Floor(5.0 * capacidadeCaracteres / maiorTexto * 10) / 10);
+            return $" style=\"--rtc-fs: {fonte.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)}pt\"";
+        }
+
+        /// <summary>
+        ///     Dois pares "ROTULO valor" lado a lado, ou um embaixo do outro quando <paramref name="empilhado" />
+        /// </summary>
+        private static string MontarPar(bool empilhado, string rotuloEsquerda, string valorEsquerda, string rotuloDireita,
+                string valorDireita, bool exibirSempreEsquerda = false, bool exibirSempreDireita = false)
+        {
+            if (!empilhado)
+                return MontarParRotuloValor(rotuloEsquerda, valorEsquerda, rotuloDireita, valorDireita, exibirSempreEsquerda,
+                        exibirSempreDireita);
+            return MontarLinhaRotuloValor(rotuloEsquerda, valorEsquerda, exibirSempreEsquerda) +
+                   MontarLinhaRotuloValor(rotuloDireita, valorDireita, exibirSempreDireita);
+        }
+
+        private static string Percentual(decimal? valor)
+        {
+            return valor.HasValue ? $"{valor.Value.FormatarNumeroDanfe()}%" : null;
+        }
+
+        /// <summary>
+        ///     Linha "ROTULO ........ valor" de uma célula da tabela de produtos. Vazio quando não há valor
+        /// </summary>
+        private static string MontarLinhaRotuloValor(string rotulo, string valor, bool exibirSempre = false)
+        {
+            if (string.IsNullOrEmpty(valor) && !exibirSempre) return string.Empty;
+            return $"<div class=\"rtc-lin\"><span>{rotulo}</span><span>{valor}</span></div>";
+        }
+
+        /// <summary>
+        ///     Linha com dois pares "ROTULO ... valor" lado a lado. Pares sem valor ficam em branco; vazio quando ambos não têm valor
+        /// </summary>
+        private static string MontarParRotuloValor(string rotuloEsquerda, string valorEsquerda, string rotuloDireita,
+                string valorDireita, bool exibirSempreEsquerda = false, bool exibirSempreDireita = false)
+        {
+            if (string.IsNullOrEmpty(valorEsquerda) && string.IsNullOrEmpty(valorDireita) && !exibirSempreEsquerda &&
+                !exibirSempreDireita) return string.Empty;
+            var esquerda = string.IsNullOrEmpty(valorEsquerda) && !exibirSempreEsquerda
+                    ? "<span></span>"
+                    : $"<span><span>{rotuloEsquerda}</span><span>{valorEsquerda}</span></span>";
+            var direita = string.IsNullOrEmpty(valorDireita) && !exibirSempreDireita
+                    ? "<span></span>"
+                    : $"<span><span>{rotuloDireita}</span><span>{valorDireita}</span></span>";
+            return $"<div class=\"rtc-par\">{esquerda}{direita}</div>";
+        }
+
 
         /// <summary>
         ///     Realizar a leitura de arquivo e substitui tags
