@@ -558,6 +558,17 @@ namespace NFe.Classes.Servicos.Evento
 
         #endregion
 
+        #region Vinculação da Transação de Pagamento (110300)
+
+        /// <summary>
+        ///     P24 - Dados do pagamento do evento 110300 - Vinculação Pagamento
+        ///     <para>Usa <see cref="nProt"/> com o protocolo de autorização do DF-e.</para>
+        /// </summary>
+        [XmlElement("gPgto")]
+        public gPgtoEvento gPgto { get; set; }
+
+        #endregion
+
         #endregion
     }
 }

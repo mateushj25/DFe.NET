@@ -105,6 +105,7 @@ namespace NFe.Utils.Evento
             NFeTipoEvento.TeNfeImportacaoEmAlcZfmNaoConvertidaEmIsencao,
             NFeTipoEvento.TeNfeFornecimentoNaoRealizadoComPagamentoAntecipado,
             NFeTipoEvento.TeNfeAtualizacaoDaDataDePrevisaoDeEntrega,
+            NFeTipoEvento.TeNfeVinculacaoPagamento,
             NFeTipoEvento.TeNfeSolicitacaoDeApropriacaoDeCreditoPresumido,
             NFeTipoEvento.TeNfeDestinacaoDeItemParaConsumoPessoal,
             NFeTipoEvento.TeNfeAceiteDeDebitoNaApuracaoPorEmissaoDeNotaDeCredito,

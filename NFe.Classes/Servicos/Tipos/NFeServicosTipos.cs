@@ -250,7 +250,12 @@ namespace NFe.Classes.Servicos.Tipos
         /// <summary>
         ///     Serviço para permitir ao fornecedor atualizar a data da previsão de entrega ou disponibilização do bem ao adquirente, de forma a remover o débito do mês em que foi previsto inicialmente. 
         /// </summary>
-        RecepcaoEventoAtualizacaoDataPrevisaoDeEntrega
+        RecepcaoEventoAtualizacaoDataPrevisaoDeEntrega,
+
+        /// <summary>
+        ///     Serviço para permitir ao emitente vincular o DF-e a uma transação de pagamento (split payment) - NT 2026.006
+        /// </summary>
+        RecepcaoEventoVinculacaoTransacaoDePagamento
     }
 
     /// <summary>
@@ -289,6 +294,7 @@ namespace NFe.Classes.Servicos.Tipos
     ///     110193 - Cancelamento Insucesso na Entrega da NF-e
     ///     110750 - Conciliação Financeira da NF-e
     ///     110751 - Cancelamento Conciliação Financeira da NF-e
+    ///     110300 - Vinculação Pagamento
     ///     112110 - Informação de efetivo pagamento integral para liberar crédito presumido do adquirente
     ///     112120 - Importação em ALC/ZFM não convertida em isenção
     ///     112140 - Fornecimento não realizado com pagamento antecipado
@@ -423,6 +429,13 @@ namespace NFe.Classes.Servicos.Tipos
         [Description("Atualização da Data de Previsão de Entrega")]
         [XmlEnum("112150")]
         TeNfeAtualizacaoDaDataDePrevisaoDeEntrega = 112150,
+        
+        /// <summary>
+        /// 110300 - Vinculação Pagamento
+        /// </summary>
+        [Description("Vinculação Pagamento")]
+        [XmlEnum("110300")]
+        TeNfeVinculacaoPagamento = 110300,
         
         /// <summary>
         /// 211110 - Solicitação de Apropriação de crédito presumido

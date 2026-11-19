@@ -435,6 +435,7 @@ namespace NFe.Servicos
                 ServicoNFe.RecepcaoEventoPerecimentoPerdaRouboOuFurtoDuranteOTransporteContratadoPeloFornecedor,
                 ServicoNFe.RecepcaoEventoFornecimentoNaoRealizadoComPagamentoAntecipado,
                 ServicoNFe.RecepcaoEventoAtualizacaoDataPrevisaoDeEntrega,
+                ServicoNFe.RecepcaoEventoVinculacaoTransacaoDePagamento,
             };
             if (
                 !listaEventos.Contains(servicoEvento))
@@ -580,6 +581,7 @@ namespace NFe.Servicos
                 case ServicoNFe.RecepcaoEventoPerecimentoPerdaRouboOuFurtoDuranteOTransporteContratadoPeloFornecedor:
                 case ServicoNFe.RecepcaoEventoFornecimentoNaoRealizadoComPagamentoAntecipado:
                 case ServicoNFe.RecepcaoEventoAtualizacaoDataPrevisaoDeEntrega: 
+                case ServicoNFe.RecepcaoEventoVinculacaoTransacaoDePagamento:
                     deveValidarDetalhamentoDoEvento = true;
                     break;
                 default: 
@@ -2086,6 +2088,59 @@ namespace NFe.Servicos
             return retornoRecepcaoEvento;
         }
 
+        /// <summary>
+        ///     Serviço para o evento 110300 - Vinculação Pagamento (split payment, NT 2026.006).
+        ///     <para>Cada evento vincula uma única transação financeira ao DF-e já autorizado.</para>
+        ///     <para>Para cancelar o evento use <see cref="RecepcaoEventoCancelamentoDeEvento"/> com tpEventoAut = "110300".</para>
+        /// </summary>
+        /// <param name="idLote">Nº do lote</param>
+        /// <param name="sequenciaEvento">sequencia do evento</param>
+        /// <param name="cpfCnpj">CPF/CNPJ do emitente</param>
+        /// <param name="chaveNFe">Chave de acesso do DF-e</param>
+        /// <param name="nProtNFe">Número do protocolo de autorização do DF-e</param>
+        /// <param name="idTransacao">Identificador da transação financeira (2 a 35 caracteres)</param>
+        /// <param name="tpMeioPgto">Código do meio de pagamento (IT DFe 2026.001)</param>
+        /// <param name="cnpjReceb">CNPJ completo do recebedor do pagamento</param>
+        /// <param name="cnpjBasePsp">CNPJ base da instituição financeira ou de pagamento do recebedor</param>
+        /// <param name="ufAutor"></param>
+        /// <param name="versaoAplicativo"></param>
+        /// <param name="dataHoraEvento"></param>
+        /// <returns></returns>
+        public RetornoRecepcaoEvento RecepcaoEventoVinculacaoTransacaoDePagamento(int idLote,
+                                                                                  int sequenciaEvento,
+                                                                                  string cpfCnpj,
+                                                                                  string chaveNFe,
+                                                                                  string nProtNFe,
+                                                                                  string idTransacao,
+                                                                                  string tpMeioPgto,
+                                                                                  string cnpjReceb,
+                                                                                  string cnpjBasePsp,
+                                                                                  Estado? ufAutor = null,
+                                                                                  string versaoAplicativo = null,
+                                                                                  DateTimeOffset? dataHoraEvento = null)
+        {
+            const ServicoNFe servicoNfe = ServicoNFe.RecepcaoEventoVinculacaoTransacaoDePagamento;
+            const NFeTipoEvento nfeTipoEvento = NFeTipoEvento.TeNfeVinculacaoPagamento;
+            var versaoServicoRecepcao = _cFgServico.VersaoRecepcaoEventosDeApuracaoDoIbsECbs;
+            var versaoServicoRecepcaoString = servicoNfe.VersaoServicoParaString(versaoServicoRecepcao);
+
+            var detalhesEvento = ObterDetalhesEvento(versaoServicoRecepcaoString, versaoAplicativo, nfeTipoEvento, ufAutor, TipoAutor.taEmpresaEmitente);
+            detalhesEvento.nProt = nProtNFe;
+            detalhesEvento.gPgto = new gPgtoEvento
+            {
+                idTransacao = idTransacao,
+                tpMeioPgto = tpMeioPgto,
+                CNPJReceb = cnpjReceb,
+                CNPJBasePSP = cnpjBasePsp
+            };
+
+            var informacoesEventoEnv = ObterInformacoesEventoEnv(sequenciaEvento, chaveNFe, cpfCnpj, versaoServicoRecepcaoString, cOrgao: Estado.SVRS, dataHoraEvento, nfeTipoEvento, detalhesEvento);
+            var evento = ObterEvento(versaoServicoRecepcaoString, informacoesEventoEnv);
+
+            var retornoRecepcaoEvento = EnviarEObterRetornoRecepcaoEvento(idLote, servicoNfe, versaoServicoRecepcao, deveAssinar: true, evento);
+
+            return retornoRecepcaoEvento;
+        }
         private detEvento ObterDetalhesEvento(string versaoServico, string versaoAplicativo, NFeTipoEvento nfeTipoEvento, Estado? cOrgaoAutor, TipoAutor tipoAutor)
         {
             var detEvento = new detEvento

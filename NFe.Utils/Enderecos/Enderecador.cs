@@ -1694,7 +1694,8 @@ namespace NFe.Utils.Enderecos
                 ServicoNFe.RecepcaoEventoPerecimentoPerdaRouboOuFurtoDuranteOTransporteContratadoPeloAdquirente,
                 ServicoNFe.RecepcaoEventoPerecimentoPerdaRouboOuFurtoDuranteOTransporteContratadoPeloFornecedor,
                 ServicoNFe.RecepcaoEventoFornecimentoNaoRealizadoComPagamentoAntecipado,
-                ServicoNFe.RecepcaoEventoAtualizacaoDataPrevisaoDeEntrega
+                ServicoNFe.RecepcaoEventoAtualizacaoDataPrevisaoDeEntrega,
+                ServicoNFe.RecepcaoEventoVinculacaoTransacaoDePagamento
             };
             
             var urlsParaOsServicosDosEventosDeApuracaoDoIbsECbs = new Dictionary<TipoAmbiente, string>
@@ -1793,6 +1794,7 @@ namespace NFe.Utils.Enderecos
                 case ServicoNFe.RecepcaoEventoPerecimentoPerdaRouboOuFurtoDuranteOTransporteContratadoPeloFornecedor:
                 case ServicoNFe.RecepcaoEventoFornecimentoNaoRealizadoComPagamentoAntecipado:
                 case ServicoNFe.RecepcaoEventoAtualizacaoDataPrevisaoDeEntrega:
+                case ServicoNFe.RecepcaoEventoVinculacaoTransacaoDePagamento:
                     return cfgServico.VersaoRecepcaoEventosDeApuracaoDoIbsECbs;
             }
             return null;
