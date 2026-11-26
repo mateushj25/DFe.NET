@@ -48,6 +48,27 @@ namespace NFe.Danfe.Html.CrossCutting
             return $"{(int) crt} - {descricao}";
         }
 
+        /// <summary>
+        ///     Indica se o grupo do ICMS do item traz valores (base de cálculo, alíquota ou valor do ICMS)
+        /// </summary>
+        public static bool PossuiValoresIcms(this ICMSBasico icms)
+        {
+            return TemValor(icms, "vBC") || TemValor(icms, "pICMS") || TemValor(icms, "vICMS");
+        }
+
+        private static bool TemValor(object instance, string propName)
+        {
+            try
+            {
+                var property = instance.GetType().GetProperty(propName, BindingFlags.Public | BindingFlags.Instance);
+                return property != null && property.GetValue(instance, null) != null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         public static string orig(this ICMSBasico icms)
         {
             return GetOrigIcms(icms, "orig");

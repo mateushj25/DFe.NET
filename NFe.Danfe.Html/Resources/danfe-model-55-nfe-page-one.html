@@ -460,13 +460,13 @@
                 <tbody>
                     <tr>
                         <td colspan="2" class="txt-upper">
-                            Recebemos de [ds_company_issuer_name] os produtos e serviços
-                            constantes na nota fiscal indicada ao lado
+                            Recebemos de [ds_company_issuer_name] os produtos/serviços
+                            constantes da Nota Fiscal Eletrônica indicada ao lado
                         </td>
                         <td rowspan="2" class="tserie txt-center">
                             <span class="font-12" style="margin-bottom: 5px">NF-e</span>
                             <span>Nº [nl_invoice]</span>
-                            <span>Série [ds_invoice_serie]</span>
+                            <span>SÉRIE [ds_invoice_serie]</span>
                         </td>
                     </tr>
                     <tr>
@@ -474,7 +474,7 @@
                             <span class="nf-label">Data de recebimento</span>
                         </td>
                         <td style="width: 100mm">
-                            <span class="nf-label">Identificação de assinatura do Recebedor</span>
+                            <span class="nf-label">Identificação e assinatura do Recebedor</span>
                         </td>
                     </tr>
                 </tbody>
@@ -519,20 +519,17 @@
                                     <span>[nl_invoice]</span>
                                 </span>
                                 <span class="block bold">
-                                    <span>SÉRIE:</span>
+                                    <span>SÉRIE</span>
                                     <span>[ds_invoice_serie]</span>
                                 </span>
                                 <span class="block">
-                                    <span>Página</span>
-                                    <span>[actual_page]</span>
-                                    <span>de</span>
-                                    <span>[total_pages]</span>
+                                    <span>FOLHA</span>
+                                    <span>[actual_page]/[total_pages]</span>
                                 </span>
                             </p>
                         </td>
                         <td class="txt-upper" style="width: 85mm">
-                            <span class="nf-label">Controle do Fisco</span>
-                            <span class="codigo">
+                                                        <span class="codigo">
                                 <img alt="" style="width: 97%; margin: auto; height: 40px; margin: 5px 15px 5px 5px;" src="[BarCode]" />
                             </span>
                         </td>
@@ -613,8 +610,8 @@
                 </tbody>
             </table>
 
-            <!-- Destinatário/Emitente -->
-            <p class="area-name">Destinatário/Emitente</p>
+            <!-- Destinatário / Remetente -->
+            <p class="area-name">Destinatário / Remetente</p>
             <table cellpadding="0" cellspacing="0" class="boxDestinatario border-table">
                 <tbody>
                     <tr>
@@ -661,7 +658,7 @@
                             </table>
                         </td>
                         <td>
-                            <span class="nf-label">DATA DE ENTR./SAÍDA</span>
+                            <span class="nf-label">DATA DE ENTRADA / SAÍDA</span>
                             <span class="info">[dt_input_output]</span>
                         </td>
                     </tr>
@@ -694,8 +691,8 @@
                             </table>
                         </td>
                         <td>
-                            <span class="nf-label">HORA ENTR./SAÍDA</span>
-                            <span id="info">[hr_input_output]</span>
+                            <span class="nf-label">HORA DE SAÍDA</span>
+                            <span class="info">[hr_input_output]</span>
                         </td>
                     </tr>
                 </tbody>
@@ -716,7 +713,7 @@
                     <div class="c4"><span class="nf-label">VALOR DO FRETE</span><span class="info">[vl_shipping]</span></div>
                     <div class="c4"><span class="nf-label">VALOR DO SEGURO</span><span class="info">[vl_insurance]</span></div>
                     <div class="c4"><span class="nf-label">DESCONTO</span><span class="info">[vl_discount]</span></div>
-                    <div class="c4"><span class="nf-label">OUTRAS DESPESAS ACESSÓRIAS</span><span class="info">[vl_other_expense]</span></div>
+                    <div class="c4"><span class="nf-label">OUTRAS DESPESAS</span><span class="info">[vl_other_expense]</span></div>
                     <div class="c4 total-nota"><span class="nf-label">VALOR TOTAL DA NOTA</span><span class="info">[vl_total]</span></div>
                     <!--[ini_tributo_aprox]-->
                     <div class="c16"><span class="nf-label">V. APROX. DO TRIBUTO</span><span class="info">[vl_total_tax_approx]</span></div>

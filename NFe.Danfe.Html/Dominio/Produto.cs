@@ -75,6 +75,11 @@ namespace NFe.Danfe.Html.Dominio
         public decimal PIcms { get; }
 
         /// <summary>
+        ///     Indica se o XML traz os valores do ICMS do item (base, alíquota e valor). Quando falso, o DANFE imprime só o rótulo
+        /// </summary>
+        public bool PossuiIcms { get; }
+
+        /// <summary>
         ///     IPI
         /// </summary>
         public decimal? ValorIpi { get; }
@@ -190,6 +195,7 @@ namespace NFe.Danfe.Html.Dominio
             ValorIpi = vIpi;
             PIpi = pIpI;
             ValorTotal = valorTotal;
+            PossuiIcms = true;
         }
 
         /// <summary>
@@ -222,12 +228,13 @@ namespace NFe.Danfe.Html.Dominio
         /// <param name="vCbs">Valor da CBS</param>
         /// <param name="pIs">Alíquota do IS</param>
         /// <param name="vIs">Valor do IS</param>
+        /// <param name="possuiIcms">Indica se o XML traz os valores do ICMS do item</param>
         public Produto(string codigo, string descricao, string infAdic, string unidade, decimal quantidade, decimal valorUnitario,
                 decimal valorIcms, string ncm, string cfop, string origem, decimal baseCalculo, decimal pIcms, decimal? pIpI,
                 decimal? vIpi, decimal valorTotal, decimal? baseCalculoIpi, string cClassTrib = null,
                 decimal? baseCalculoIbsCbs = null, decimal? baseCalculoIs = null, decimal? pIbsUf = null,
                 decimal? vIbsUf = null, decimal? pIbsMun = null, decimal? vIbsMun = null, decimal? pCbs = null,
-                decimal? vCbs = null, decimal? pIs = null, decimal? vIs = null)
+                decimal? vCbs = null, decimal? pIs = null, decimal? vIs = null, bool possuiIcms = true)
                 : this(codigo, descricao, infAdic, unidade, quantidade, valorUnitario, valorIcms, ncm, cfop, origem,
                         baseCalculo, pIcms, pIpI, vIpi, valorTotal)
         {
@@ -243,6 +250,7 @@ namespace NFe.Danfe.Html.Dominio
             VCbs = vCbs;
             PIs = pIs;
             VIs = vIs;
+            PossuiIcms = possuiIcms;
         }
 
         /// <summary>

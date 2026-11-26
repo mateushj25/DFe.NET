@@ -69,6 +69,11 @@ namespace NFe.Danfe.Html.Dominio
         public string ProtocoloUso { get; }
 
         /// <summary>
+        ///     Frete por conta (modFrete - X02), independente da existência dos dados da transportadora
+        /// </summary>
+        public string FretePorConta { get; }
+
+        /// <summary>
         ///     Data emissão
         /// </summary>
         public DateTime DataEmissao { get; }
@@ -175,14 +180,33 @@ namespace NFe.Danfe.Html.Dominio
 
 
         /// <summary>
+        ///     Cria o DANFE sem a data e hora do protocolo (o protocolo é impresso como recebido)
+        /// </summary>
+        /// <param name="nfe"></param>
+        /// <param name="status">Status</param>
+        /// <param name="protocolo">Protocolo retornado pela SEFAZ (pode já conter a data e hora)</param>
+        /// <param name="creditos">Créditos</param>
+        /// <param name="issqn">ISSQN</param>
+        /// <param name="logo">Logo</param>
+        public DanfeNFe(Classes.NFe nfe, Status status, string protocolo, string creditos, Issqn issqn = null, string logo = "")
+                : this(nfe, status, protocolo, null, creditos, issqn, logo)
+        {
+        }
+
+        /// <summary>
         /// ´
         /// </summary>
         /// <param name="nfe"></param>
         /// <param name="status">Status</param>
         /// <param name="protocolo">Número do protocolo retornado pela SEFAZ</param>
+        /// <param name="dataHoraProtocolo">
+        ///     Data e hora do protocolo de autorização de uso. Quando informada, o protocolo é impresso no formato
+        ///     "número – dd/MM/yyyy HH:mm:ss" (NT 2026.010)
+        /// </param>
         /// <param name="creditos">Créditos</param>
         /// <param name="issqn">ISSQN</param>
-        public DanfeNFe(Classes.NFe nfe, Status status,string protocolo, string creditos, Issqn issqn = null, string logo = "")
+        public DanfeNFe(Classes.NFe nfe, Status status, string protocolo, DateTime? dataHoraProtocolo, string creditos,
+                Issqn issqn = null, string logo = "")
         {
             if (nfe == null) throw new ArgumentNullException(nameof(nfe));
             if(nfe.infNFe.ide.mod!=ModeloDocumento.NFe) throw new InvalidOperationException("Modelo da nota imcompatível com o esperado 55");
@@ -200,6 +224,30 @@ namespace NFe.Danfe.Html.Dominio
 
             #region Transportadora
 
+            var frete = "";
+            switch (nfe.infNFe.transp?.modFrete)
+            {
+                case ModalidadeFrete.mfContaEmitenteOumfContaRemetente:
+                    frete = "Remet/Dest";
+                    break;
+                case ModalidadeFrete.mfContaDestinatario:
+                    frete = "Destinatário";
+                    break;
+                case ModalidadeFrete.mfContaTerceiros:
+                    frete = "Terceiros";
+                    break;
+                case ModalidadeFrete.mfProprioContaRemente:
+                    frete = "Remetente";
+                    break;
+                case ModalidadeFrete.mfProprioContaDestinatario:
+                    frete = "Próprio Destinatário";
+                    break;
+                case ModalidadeFrete.mfSemFrete:
+                    frete = "Sem Frete";break;
+
+            }
+            FretePorConta = frete;
+
             if (nfe.infNFe.transp?.transporta != null)
             {
                 var placa = "";
@@ -211,29 +259,6 @@ namespace NFe.Danfe.Html.Dominio
                     placa = nfe.infNFe.transp.veicTransp.placa;
                     rntc = nfe.infNFe.transp.veicTransp.RNTC;
                 }
-                var frete = "";
-                switch (nfe.infNFe.transp.modFrete)
-                {
-                    case ModalidadeFrete.mfContaEmitenteOumfContaRemetente:
-                        frete = "Remet/Dest";
-                        break;
-                    case ModalidadeFrete.mfContaDestinatario:
-                        frete = "Destinatário";
-                        break;
-                    case ModalidadeFrete.mfContaTerceiros:
-                        frete = "Terceiros";
-                        break;
-                    case ModalidadeFrete.mfProprioContaRemente:
-                        frete = "Remetente";
-                        break;
-                    case ModalidadeFrete.mfProprioContaDestinatario:
-                        frete = "Próprio Destinatário";
-                        break;
-                    case ModalidadeFrete.mfSemFrete:
-                        frete = "Sem Frete";break;
-
-                }
-
                 var doc1 = nfe.infNFe.transp.transporta.CNPJ + nfe.infNFe.transp.transporta.CPF;
                 Transportadora = new Transportadora(new Endereco(nfe.infNFe.transp.transporta.xEnder, "",
                                 nfe.infNFe.transp.transporta.xMun, "", "", nfe.infNFe.transp.transporta.UF, "", ""),
@@ -293,7 +318,9 @@ namespace NFe.Danfe.Html.Dominio
 
             #region Protocolo
 
-            ProtocoloUso = protocolo;
+            ProtocoloUso = dataHoraProtocolo.HasValue && !string.IsNullOrWhiteSpace(protocolo)
+                    ? $"{protocolo} – {dataHoraProtocolo.Value:dd/MM/yyyy HH:mm:ss}"
+                    : protocolo;
             #endregion
 
             #region Produtos
@@ -305,11 +332,13 @@ namespace NFe.Danfe.Html.Dominio
                 decimal valorIcms=0;
                 decimal icmsBaseCalculo = 0;
                 decimal pIcms = 0;
+                var possuiIcms = false;
                 if (item.imposto.ICMS != null)
                 {
                      var cst = item.imposto.ICMS.TipoICMS.Cst();
                      var csosn = item.imposto.ICMS.TipoICMS.Csosn();
-                     st = cst + csosn;
+                     st = item.imposto.ICMS.TipoICMS.orig() + cst + csosn;
+                     possuiIcms = item.imposto.ICMS.TipoICMS.PossuiValoresIcms();
                      valorIcms = item.imposto.ICMS.TipoICMS.vICMS();
                      icmsBaseCalculo = item.imposto.ICMS.TipoICMS.vBC();
                      pIcms = item.imposto.ICMS.TipoICMS.pICMS();
@@ -331,7 +360,7 @@ namespace NFe.Danfe.Html.Dominio
                         gIbsCbs?.gIBSUF?.pIBSUF.ObterAliquotaEfetiva(gIbsCbs.gIBSUF.gRed), gIbsCbs?.gIBSUF?.vIBSUF,
                         gIbsCbs?.gIBSMun?.pIBSMun.ObterAliquotaEfetiva(gIbsCbs.gIBSMun.gRed), gIbsCbs?.gIBSMun?.vIBSMun,
                         gIbsCbs?.gCBS?.pCBS.ObterAliquotaEfetiva(gIbsCbs.gCBS.gRed), gIbsCbs?.gCBS?.vCBS,
-                        isItem?.pIS, isItem?.vIS));
+                        isItem?.pIS, isItem?.vIS, possuiIcms));
 
             });
 
